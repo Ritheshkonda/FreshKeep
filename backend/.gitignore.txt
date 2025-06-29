@@ -1,0 +1,30 @@
+# Python compiled files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+# This is crucial! Your 'venv' folder contains all installed libraries
+# and can be very large. It's recreated easily.
+venv/
+env/ # Common alternative name for virtual environment
+
+# IDE-specific files (e.g., VS Code, PyCharm)
+.vscode/ # VS Code workspace settings, if you want to ignore them
+.idea/   # PyCharm project files
+
+# Environment variables - CRITICAL FOR SECURITY!
+# Contains your DATABASE_URL and GEMINI_API_KEY. Never commit this!
+.env
+
+# Database files (if using SQLite, like 'site.db')
+# If you're using PostgreSQL remotely or on a dedicated server,
+# you won't have this file in your project directory, but it's good practice
+# to include if you switch to SQLite or have local dev DB files.
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log

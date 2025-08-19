@@ -1,62 +1,41 @@
-# app.py
 from flask import Flask, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
 
-# --- NEW IMPORTS FOR GEMINI API ---
+# --- MongoDB Imports ---
+from flask_pymongo import PyMongo
+from bson.objectid import ObjectId
+# --- End MongoDB Imports ---
+
+# --- Gemini API Imports ---
 import google.generativeai as genai
-# --- END NEW IMPORTS ---
+# --- End Gemini API Imports ---
 
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL')
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# --- MongoDB Configuration ---
+# Use the DATABASE_URL environment variable for connection
+app.config['MONGO_URI'] = os.getenv('DATABASE_URL')
+mongo = PyMongo(app)
+# --- End MongoDB Configuration ---
 
 CORS(app)
 
-db = SQLAlchemy(app)
-
 # --- Configure Gemini API ---
-# Retrieve API key from environment variable
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 if not GEMINI_API_KEY:
     raise ValueError("GEMINI_API_KEY not found in .env file. Please get one from Google AI Studio.")
 genai.configure(api_key=GEMINI_API_KEY)
-
-# Initialize the generative model
-# You can choose different models like 'gemini-pro-vision' for multimodal
 model = genai.GenerativeModel('gemini-1.5-flash')
 # --- END Gemini API Configuration ---
 
-# --- FoodItem Model ---
-class FoodItem(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)
-    expiry_date = db.Column(db.Date, nullable=False)
-    category = db.Column(db.String(50), nullable=True)
-    quantity = db.Column(db.Float, nullable=True)
-    unit = db.Column(db.String(20), nullable=True)
 
-    def __repr__(self):
-        return f'<FoodItem {self.name} - {self.expiry_date}>'
-
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'name': self.name,
-            'expiry': self.expiry_date.isoformat(),
-            'category': self.category,
-            'quantity': self.quantity,
-            'unit': self.unit
-        }
-
-# --- FoodItem API Endpoints ---
+# --- API Endpoints ---
 
 @app.route('/api/items', methods=['POST'])
 def add_item():
@@ -71,78 +50,137 @@ def add_item():
         return jsonify({'error': 'Item name and expiry date are required'}), 400
 
     try:
-        expiry_date = datetime.strptime(expiry_str, '%Y-%m-%d').date()
+        # Use datetime object directly, without converting to .date()
+        expiry_date = datetime.strptime(expiry_str, '%Y-%m-%d')
     except ValueError:
         return jsonify({'error': 'Invalid expiry date format. Use YYYY-MM-DD'}), 400
 
-    new_item = FoodItem(
-        name=name,
-        expiry_date=expiry_date,
-        category=data.get('category'),
-        quantity=data.get('quantity'),
-        unit=data.get('unit')
-    )
+    new_item = {
+        'name': name,
+        'expiry_date': expiry_date,
+        'category': data.get('category'),
+        'quantity': data.get('quantity'),
+        'unit': data.get('unit')
+    }
 
-    db.session.add(new_item)
-    db.session.commit()
-    return jsonify(new_item.to_dict()), 201
+    # Insert document into the 'food_item' collection
+    result = mongo.db.food_item.insert_one(new_item)
+    
+    # Prepare the response
+    response_item = {
+        'id': str(result.inserted_id),
+        '_id': str(result.inserted_id),
+        'name': name,
+        'expiry': expiry_date.strftime('%Y-%m-%d'),
+        'category': data.get('category'),
+        'quantity': data.get('quantity'),
+        'unit': data.get('unit')
+    }
+    
+    return jsonify(response_item), 201
 
 @app.route('/api/items', methods=['GET'])
 def get_items():
-    items = FoodItem.query.order_by(FoodItem.expiry_date).all()
-    return jsonify([item.to_dict() for item in items]), 200
+    # Find all documents in 'food_item' collection
+    items = list(mongo.db.food_item.find().sort('expiry_date', 1))
+    
+    # Convert ObjectId and datetime to string for JSON serialization
+    for item in items:
+        item['_id'] = str(item['_id'])
+        item['id'] = item['_id']
+        if isinstance(item.get('expiry_date'), datetime):
+             item['expiry'] = item['expiry_date'].strftime('%Y-%m-%d')
+        del item['expiry_date']
 
-@app.route('/api/items/<int:item_id>', methods=['GET'])
+    return jsonify(items), 200
+
+@app.route('/api/items/<item_id>', methods=['GET'])
 def get_item(item_id):
-    item = db.session.get(FoodItem, item_id)
-    if not item:
-        return jsonify({'message': 'Item not found'}), 404
-    return jsonify(item.to_dict()), 200
-
-@app.route('/api/items/<int:item_id>', methods=['PUT'])
-def update_item(item_id):
-    item = db.session.get(FoodItem, item_id)
-    if not item:
-        return jsonify({'message': 'Item not found'}), 404
-    data = request.get_json()
-
-    item.name = data.get('name', item.name)
-    expiry_str = data.get('expiry', item.expiry_date.isoformat())
     try:
-        item.expiry_date = datetime.strptime(expiry_str, '%Y-%m-%d').date()
-    except ValueError:
-        return jsonify({'error': 'Invalid expiry date format'}), 400
+        # Find one document by its ObjectId
+        item = mongo.db.food_item.find_one({'_id': ObjectId(item_id)})
+    except:
+        return jsonify({'message': 'Invalid item ID format'}), 400
 
-    item.category = data.get('category', item.category)
-    item.quantity = data.get('quantity', item.quantity)
-    item.unit = data.get('unit', item.unit)
-
-    db.session.commit()
-    return jsonify(item.to_dict()), 200
-
-@app.route('/api/items/<int:item_id>', methods=['DELETE'])
-def delete_item(item_id):
-    item = db.session.get(FoodItem, item_id)
     if not item:
         return jsonify({'message': 'Item not found'}), 404
-    db.session.delete(item)
-    db.session.commit()
+    
+    # Convert ObjectId and datetime to string for JSON serialization
+    item['_id'] = str(item['_id'])
+    item['id'] = item['_id']
+    if isinstance(item.get('expiry_date'), datetime):
+        item['expiry'] = item['expiry_date'].strftime('%Y-%m-%d')
+    del item['expiry_date']
+
+    return jsonify(item), 200
+
+@app.route('/api/items/<item_id>', methods=['PUT'])
+def update_item(item_id):
+    data = request.get_json()
+    try:
+        item_id_obj = ObjectId(item_id)
+        update_data = {key: value for key, value in data.items() if key != 'id'}
+        
+        if 'expiry' in update_data:
+            # Use datetime object directly, without converting to .date()
+            update_data['expiry_date'] = datetime.strptime(update_data['expiry'], '%Y-%m-%d')
+            del update_data['expiry']
+        
+        result = mongo.db.food_item.update_one(
+            {'_id': item_id_obj},
+            {'$set': update_data}
+        )
+    except:
+        return jsonify({'message': 'Invalid item ID format'}), 400
+
+    if result.matched_count == 0:
+        return jsonify({'message': 'Item not found'}), 404
+
+    # Fetch the updated item to return it
+    updated_item = mongo.db.food_item.find_one({'_id': item_id_obj})
+    updated_item['_id'] = str(updated_item['_id'])
+    updated_item['id'] = updated_item['_id']
+    if isinstance(updated_item.get('expiry_date'), datetime):
+        updated_item['expiry'] = updated_item['expiry_date'].strftime('%Y-%m-%d')
+    del updated_item['expiry_date']
+
+    return jsonify(updated_item), 200
+
+@app.route('/api/items/<item_id>', methods=['DELETE'])
+def delete_item(item_id):
+    try:
+        # Delete one document by ObjectId
+        result = mongo.db.food_item.delete_one({'_id': ObjectId(item_id)})
+    except:
+        return jsonify({'message': 'Invalid item ID format'}), 400
+
+    if result.deleted_count == 0:
+        return jsonify({'message': 'Item not found'}), 404
+
     return jsonify({'message': 'Item deleted successfully'}), 204
 
 @app.route('/api/items/nearing-expiry', methods=['GET'])
 def get_nearing_expiry_items():
     days = request.args.get('days', type=int, default=7)
-    today = datetime.now().date()
+    # Use datetime objects for comparison
+    today = datetime.now()
     expiry_threshold = today + timedelta(days=days)
 
-    nearing_items = FoodItem.query.filter(
-        FoodItem.expiry_date >= today,
-        FoodItem.expiry_date <= expiry_threshold
-    ).order_by(FoodItem.expiry_date).all()
+    # Find documents where expiry_date is within the threshold
+    items = list(mongo.db.food_item.find({
+        'expiry_date': {'$gte': today, '$lte': expiry_threshold}
+    }).sort('expiry_date', 1))
 
-    return jsonify([item.to_dict() for item in nearing_items])
+    for item in items:
+        item['_id'] = str(item['_id'])
+        item['id'] = item['_id']
+        if isinstance(item.get('expiry_date'), datetime):
+            item['expiry'] = item['expiry_date'].strftime('%Y-%m-%d')
+        del item['expiry_date']
 
-# --- NEW: Recipe Generation Endpoint with LLM Integration ---
+    return jsonify(items)
+
+# --- Recipe Generation Endpoint with LLM Integration ---
 @app.route('/api/generate-recipe', methods=['POST'])
 def generate_recipe():
     data = request.get_json()
@@ -157,7 +195,6 @@ def generate_recipe():
             'instructions': 'Please add some food items to your inventory first!'
         }), 200
 
-    # Create a concise prompt for the LLM
     prompt = (
         f"Generate a creative and practical recipe using ONLY these ingredients from a home kitchen inventory: "
         f"{', '.join(inventory_items)}. "
@@ -169,12 +206,9 @@ def generate_recipe():
     )
 
     try:
-        # Make the API call to Gemini
         response = model.generate_content(prompt)
-        raw_text = response.text.strip() # Get the generated text
+        raw_text = response.text.strip()
 
-        # --- Parse the LLM's response ---
-        # This is crucial and might need adjustment based on LLM's actual output format
         recipe_name = "Generated Recipe"
         ingredients = "Could not parse ingredients."
         instructions = "Could not parse instructions."
@@ -186,10 +220,8 @@ def generate_recipe():
             elif line.startswith("Ingredients:"):
                 ingredients = line.replace("Ingredients:", "").strip()
             elif line.startswith("Instructions:"):
-                # Capture instructions starting from this line until the end or next heading
                 instructions_start_index = lines.index(line)
                 instructions_lines = lines[instructions_start_index+1:]
-                # Filter out empty lines or lines that might be part of a new section if not careful
                 instructions = "\n".join([s.strip() for s in instructions_lines if s.strip() and not s.strip().startswith(("Recipe Name:", "Ingredients:"))])
 
         return jsonify({
@@ -199,7 +231,6 @@ def generate_recipe():
         }), 200
 
     except Exception as e:
-        # Handle potential API errors (e.g., network issues, invalid API key, rate limits)
         print(f"Error calling Gemini API: {e}")
         return jsonify({
             'name': 'Recipe Generation Failed',
@@ -207,13 +238,6 @@ def generate_recipe():
             'instructions': f'An error occurred: {str(e)}'
         }), 500
 
-
-# --- Database Initialization Command ---
-@app.cli.command('create-db')
-def create_db():
-    """Creates database tables."""
-    db.create_all()
-    print("Database tables created!")
 
 # --- Run the Flask app ---
 if __name__ == '__main__':

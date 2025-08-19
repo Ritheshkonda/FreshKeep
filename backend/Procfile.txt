@@ -1,3 +1,0 @@
-# In your 'backend' folder
-# Filename: Procfile
-web: gunicorn app:app

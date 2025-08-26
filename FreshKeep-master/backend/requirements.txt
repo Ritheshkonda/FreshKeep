@@ -1,0 +1,7 @@
+Flask==2.3.2
+Flask-CORS
+gunicorn
+python-dotenv
+google-generativeai
+Flask-PyMongo
+pymongo

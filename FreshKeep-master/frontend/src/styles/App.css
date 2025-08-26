@@ -1,0 +1,136 @@
+/* --- Global Styles --- */
+:root {
+  --primary-color: #4CAF50;
+  --primary-dark: #388E3C;
+  --accent-color: #FFC107;
+  --background-light: #f4f7f6;
+  --text-dark: #333;
+  --text-light: #f8f8f8;
+  --border-color: #ddd;
+  --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  --blue-color: #3b5998;
+  --blue-dark: #2d4373;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: var(--background-light);
+  color: var(--text-dark);
+  margin: 0;
+  padding: 0;
+}
+
+.App {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* --- Header & Navigation Bar --- */
+.App-header {
+  background-color: var(--primary-color);
+  color: var(--text-light);
+  padding: 2rem 1rem 0;
+  box-shadow: var(--shadow);
+  border-bottom-left-radius: 1rem;
+  border-bottom-right-radius: 1rem;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.App-header h1 {
+  margin: 0;
+  font-size: 2.5rem;
+}
+
+.App-header p {
+  margin: 0.5rem 0 1rem;
+  font-style: italic;
+  opacity: 0.8;
+}
+
+/* Base Navbar Styles (Mobile-First) */
+.navbar {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background-color: transparent;
+  color: white;
+  position: relative;
+  z-index: 10;
+}
+
+/* The dropdown container */
+.dropdown {
+  position: relative;
+}
+
+/* Styling for the main button */
+.dropdown-btn {
+  background: #1f2937;
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  transition: background-color 0.2s, box-shadow 0.2s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Rule for the button when the dropdown is open */
+.dropdown-btn.active-btn {
+  background-color: #16a34a;
+  color: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Styling for the dropdown content */
+.dropdown-content {
+  display: none;
+  flex-direction: column;
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  min-width: 12rem;
+  background-color: #22c55e;
+  color: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1),
+              0 1px 3px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  padding: 0.5rem 0;
+  transform: translateY(-10px);
+  opacity: 0;
+  transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+}
+
+/* Rule to show the dropdown content */
+.dropdown-content.show {
+  display: flex;
+  transform: translateY(0);
+  opacity: 1;
+}
+
+/* Styling for the links inside the dropdown */
+.dropdown-content a,
+.dropdown-content button {
+  display: block;
+  padding: 0.75rem 1.5rem;
+  text-align: left;
+  text-decoration: none;
+  color: white;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.dropdown-content a:hover,
+.dropdown-content button:hover {
+  background-color: #16a34a;
+}
